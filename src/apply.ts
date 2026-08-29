@@ -89,7 +89,12 @@ export const recolor = (
 export const withPartIds = (doc: SvgDocument, model: PartModel) => {
 	const byNode = new Map<string, string>();
 	model.parts.forEach((part) =>
-		part.nodeIds.forEach((nodeId) => byNode.set(nodeId, part.id))
+		part.nodeIds.forEach((nodeId) => {
+			// A shape can be in a fill part and a stroke part; the first one
+			// that claims it is the one a click reports, so the attribute is
+			// stable rather than whichever part happened to be last.
+			if (!byNode.has(nodeId)) byNode.set(nodeId, part.id);
+		})
 	);
 	const edits = doc.nodes
 		.filter((node) => byNode.has(node.id))

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
 	applyParts,
+	availablePaints,
 	colorMapOf,
 	defaultColors,
 	groupPart,
@@ -288,5 +289,43 @@ describe('selectionSummary', () => {
 			count: 1,
 			parts: []
 		});
+	});
+});
+
+describe('a shape with both a fill and a stroke', () => {
+	// The shield: one path carrying a blue fill and a black outline. They are
+	// two colours on one shape, so they are two parts.
+	const SHIELD = `<svg><path id="body" d="M0 0h9v9H0z" fill="#2457c5" stroke="#161310"/><rect id="bar" x="1" y="4" width="7" height="1" fill="#f5b400"/></svg>`;
+
+	test('is in a fill part and a stroke part at once', () => {
+		const model = partsFromColors(parseSvg(SHIELD));
+		const holding = model.parts.filter((part) =>
+			part.nodeIds.includes('body')
+		);
+		expect(holding.map((part) => part.paint).sort()).toEqual([
+			'fill',
+			'stroke'
+		]);
+	});
+
+	test('grouping its fill leaves its outline alone', () => {
+		const doc = parseSvg(SHIELD);
+		const model = groupPart(doc, partsFromColors(doc), {
+			name: 'Shield body',
+			nodeIds: ['body']
+		});
+		const stroke = model.parts.find((part) => part.paint === 'stroke');
+		expect(stroke?.nodeIds).toContain('body');
+		const painted = recolor(SHIELD, model, {
+			'shield-body': '#ff0000'
+		});
+		expect(painted).toContain('fill="#ff0000"');
+		expect(painted).toContain('stroke="#161310"');
+	});
+
+	test('only offers the paints the selection actually has', () => {
+		const doc = parseSvg(SHIELD);
+		expect(availablePaints(doc, ['body'])).toEqual(['fill', 'stroke']);
+		expect(availablePaints(doc, ['bar'])).toEqual(['fill']);
 	});
 });

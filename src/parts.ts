@@ -134,6 +134,17 @@ export const oneWholePart = (doc: SvgDocument, name = 'the whole design') => {
 	} satisfies PartModel;
 };
 
+/** Which paints the picked shapes actually carry — a selection with no
+ *  stroke should never be offered "outline". */
+export const availablePaints = (doc: SvgDocument, nodeIds: string[]) =>
+	PAINT_ATTRS.filter((attr) =>
+		doc.nodes.some(
+			(node) =>
+				nodeIds.includes(node.id) &&
+				paintOf(node, attr)?.startsWith('#') === true
+		)
+	) as Part['paint'][];
+
 export type GroupInput = {
 	/** Nodes to pull into the new part. */
 	nodeIds: string[];
@@ -167,10 +178,19 @@ export const groupPart = (
 			.map((node) => paintOf(node, paint))
 			.find((value) => value?.startsWith('#') === true) ?? null;
 	const kept = model.parts
-		.map((part) => ({
-			...part,
-			nodeIds: part.nodeIds.filter((nodeId) => !wanted.has(nodeId))
-		}))
+		.map((part) =>
+			// A shape can be in a fill part and a stroke part at once — they
+			// are different colours on the same shape. Grouping a fill only
+			// takes it out of other fill parts.
+			part.paint === paint
+				? {
+						...part,
+						nodeIds: part.nodeIds.filter(
+							(nodeId) => !wanted.has(nodeId)
+						)
+					}
+				: part
+		)
 		// A part that lost every shape it had is not a part any more.
 		.filter((part) => part.nodeIds.length > 0);
 	const parts = [
