@@ -12,9 +12,11 @@ import {
 	partsFromColors,
 	recolor,
 	renamePart,
+	stripScripts,
 	ungroupPart,
 	withPartIds
 } from './index';
+import { selectionSummary } from './react';
 
 // A crest: two shapes drawn in the same black that mean different things,
 // which is exactly what a colour-keyed model cannot tell apart.
@@ -247,5 +249,44 @@ describe('the rest of the model', () => {
 		const marked = withPartIds(doc, model);
 		expect(marked).toContain('data-part="the-dot" data-node="dot"');
 		expect(marked).not.toContain('data-part="the-dot" data-node="shield"');
+	});
+});
+
+describe('stripScripts', () => {
+	test('takes out what a browser must never run', () => {
+		const nasty =
+			'<svg><script>alert(1)</script><rect onclick="alert(2)" fill="#fff"/><a xlink:href="javascript:alert(3)"/><foreignObject><b/></foreignObject></svg>';
+		const clean = stripScripts(nasty);
+		expect(clean).not.toContain('<script');
+		expect(clean).not.toContain('onclick');
+		expect(clean).not.toContain('javascript:');
+		expect(clean).not.toContain('foreignObject');
+		expect(clean).toContain('fill="#fff"');
+	});
+
+	test('leaves ordinary artwork alone', () => {
+		expect(stripScripts(CREST)).toBe(CREST);
+	});
+});
+
+describe('selectionSummary', () => {
+	test('says how many shapes and what they belong to', () => {
+		const doc = parseSvg(CREST);
+		const model = groupPart(doc, partsFromColors(doc), {
+			name: 'The dot',
+			nodeIds: ['dot']
+		});
+		expect(selectionSummary(model, ['dot', 'shield'])).toEqual({
+			count: 2,
+			parts: ['The dot', 'background']
+		});
+	});
+
+	test('shapes in no part contribute nothing to say', () => {
+		const doc = parseSvg(CREST);
+		expect(selectionSummary(partsFromColors(doc), ['hidden'])).toEqual({
+			count: 1,
+			parts: []
+		});
 	});
 });

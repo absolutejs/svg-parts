@@ -163,3 +163,16 @@ export const paletteOf = (doc: SvgDocument) => {
 
 	return seen;
 };
+
+/** Markup with the parts a browser must never run: scripts, event handlers,
+ *  foreignObject and javascript: links. Anything rendering artwork it did not
+ *  author should pass it through here first. */
+export const stripScripts = (markup: string) =>
+	markup
+		.replace(/<script[\s\S]*?<\/script>/giu, '')
+		.replace(/<foreignObject[\s\S]*?<\/foreignObject>/giu, '')
+		.replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/giu, '')
+		.replace(
+			/\s(?:xlink:)?href\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/giu,
+			''
+		);
