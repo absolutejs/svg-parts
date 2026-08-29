@@ -97,24 +97,49 @@ export const colorWord = (color: string | null) => {
 	return nearest?.[0] ?? null;
 };
 
-/** A first guess at a name. Every part gets a true one — the colour it is
- *  drawn in, or what it does — so no design arrives with parts nobody has
- *  named. */
-const guessName = (
-	color: string | null,
-	paint: Part['paint'],
-	taken: Set<string>
-) => {
-	const word = colorWord(color);
-	const base =
-		paint === 'stroke'
-			? `${word ?? 'the'} outline`
-			: (word ?? 'the whole design');
-	if (!taken.has(base)) return base;
-	let suffix = 2;
-	while (taken.has(`${base} ${suffix}`)) suffix += 1;
+/** Ids a drawing program leaves behind. They name the tool, not the thing. */
+const MEANINGLESS_ID =
+	/^(?:[ng]\d+|layer[-_ ]?\d*|group[-_ ]?\d*|shape[-_ ]?\d*|path[-_ ]?\d*|rect[-_ ]?\d*|circle[-_ ]?\d*|ellipse[-_ ]?\d*|line[-_ ]?\d*|poly(?:gon|line)[-_ ]?\d*|vector[-_ ]?\d*|clip[-_ ]?\d*|mask[-_ ]?\d*|svg[-_ ]?\d*|xmlid_?\d*)$/iu;
 
-	return `${base} ${suffix}`;
+const readable = (raw: string | undefined) => {
+	if (!raw) return null;
+	const cleaned = raw.trim();
+	if (!cleaned || MEANINGLESS_ID.test(cleaned)) return null;
+
+	return cleaned
+		.replace(/[-_]+/gu, ' ')
+		.replace(/([a-z\d])([A-Z])/gu, '$1 $2')
+		.replace(/\s+/gu, ' ')
+		.trim()
+		.toLowerCase();
+};
+
+/** What the artwork calls this shape, when it says. Illustrator and Figma
+ *  write layer names into ids and titles, and a name the designer chose beats
+ *  anything guessed from the drawing. */
+export const nameFromMarkup = (node: SvgNode) =>
+	readable(node.attrs['data-name']) ??
+	readable(node.attrs['aria-label']) ??
+	readable(node.attrs.id) ??
+	readable([...node.groups].reverse().find((id) => readable(id) !== null)) ??
+	null;
+
+/** What a part is, in shop words. A colour is not a name — "gold" tells you
+ *  nothing about which bit of the design it is — so this names the role and
+ *  leaves the colour to the swatch beside it. */
+const roleName = (paint: Part['paint'], position: number, total: number) => {
+	if (paint === 'stroke') return 'outline';
+	if (total === 1) return 'the design';
+
+	return position === 0 ? 'background' : 'detail';
+};
+
+const uniqueName = (wanted: string, taken: Set<string>) => {
+	if (!taken.has(wanted)) return wanted;
+	let suffix = 2;
+	while (taken.has(`${wanted} ${suffix}`)) suffix += 1;
+
+	return `${wanted} ${suffix}`;
 };
 
 const paintedNodes = (doc: SvgDocument, attr: string) =>
@@ -146,9 +171,30 @@ export const partsFromColors = (doc: SvgDocument): PartModel => {
 	const taken = new Set<string>();
 	const names = new Set<string>();
 	const entries = [...byColor.entries()];
+	const fills = entries.filter(([key]) => key.startsWith('fill:')).length;
+	let fillIndex = 0;
 	const parts = entries.map(([key, held], position) => {
 		const color = key.slice(key.indexOf(':') + 1);
-		const name = guessName(color, held.paint, names);
+		// A name the artwork carries beats anything we could guess.
+		const owned = doc.nodes.filter((node) =>
+			held.nodeIds.includes(node.id)
+		);
+		const own =
+			owned.length === 1 && owned[0] ? nameFromMarkup(owned[0]) : null;
+		// A shape's own name belongs to its fill; its outline is that name
+		// plus what it is — "ribbon outline", not a second "ribbon".
+		const carried =
+			own === null || held.paint === 'fill' ? own : `${own} outline`;
+		if (held.paint === 'fill') fillIndex += 1;
+		const name = uniqueName(
+			carried ??
+				roleName(
+					held.paint,
+					held.paint === 'fill' ? fillIndex - 1 : position,
+					held.paint === 'fill' ? fills : entries.length
+				),
+			names
+		);
 		names.add(name);
 		const id = uniqueId(slug(name, `part-${position + 1}`), taken);
 		taken.add(id);

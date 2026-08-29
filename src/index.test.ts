@@ -90,25 +90,51 @@ describe('partsFromColors', () => {
 		expect(model.parts[2]?.paint).toBe('stroke');
 	});
 
-	test('names every part for what it is, never "part 3"', () => {
+	test('names a part for what it is, not what colour it is', () => {
 		const model = partsFromColors(parseSvg(CREST));
-		// #161310 is near-black, #c8102e is a red, and the white one is an
-		// outline rather than a fill.
+		// The crest's shapes carry ids, so the artwork's own words win. The
+		// first part spans two shapes, so no single name fits it.
 		expect(model.parts.map((part) => part.name)).toEqual([
-			'black',
-			'red',
-			'white outline'
+			'background',
+			'ribbon',
+			'ribbon outline'
 		]);
 	});
 
-	test('two parts of the same colour are told apart', () => {
+	test('falls back to the role when the artwork says nothing', () => {
+		const plain = parseSvg(
+			'<svg><rect fill="#d62828"/><circle fill="#161310"/><path stroke="#c02020"/></svg>'
+		);
+		expect(partsFromColors(plain).parts.map((part) => part.name)).toEqual([
+			'background',
+			'detail',
+			'outline'
+		]);
+	});
+
+	test('one fill and nothing else is just the design', () => {
+		const one = parseSvg('<svg><rect fill="#d62828"/></svg>');
+		expect(partsFromColors(one).parts[0]?.name).toBe('the design');
+	});
+
+	test('two parts that would share a name are told apart', () => {
 		const twice = parseSvg(
-			'<svg><rect fill="#d62828"/><circle stroke="#d62828"/><path stroke="#c02020"/></svg>'
+			'<svg><rect stroke="#d62828"/><circle stroke="#161310"/></svg>'
 		);
 		expect(partsFromColors(twice).parts.map((part) => part.name)).toEqual([
-			'red',
-			'red outline',
-			'red outline 2'
+			'outline',
+			'outline 2'
+		]);
+	});
+
+	test('ignores the ids a drawing program leaves behind', () => {
+		const drawn = parseSvg(
+			'<svg><rect id="Layer_1" fill="#d62828"/><circle id="path2417" fill="#161310"/><path id="crest-band" fill="#f5b400"/></svg>'
+		);
+		expect(partsFromColors(drawn).parts.map((part) => part.name)).toEqual([
+			'background',
+			'detail',
+			'crest band'
 		]);
 	});
 
@@ -303,7 +329,7 @@ describe('selectionSummary', () => {
 		});
 		expect(selectionSummary(model, ['dot', 'shield'])).toEqual({
 			count: 2,
-			parts: ['The dot', 'black']
+			parts: ['The dot', 'background']
 		});
 	});
 
@@ -437,7 +463,7 @@ describe('paint inherited from a group', () => {
 	test('so the design has parts rather than none', () => {
 		const model = partsFromColors(parseSvg(HOOP));
 		expect(model.parts).toHaveLength(1);
-		expect(model.parts[0]?.name).toBe('black outline');
+		expect(model.parts[0]?.name).toBe('outline');
 		expect(model.parts[0]?.nodeIds).toEqual(['ring', 'cross']);
 	});
 
