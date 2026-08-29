@@ -5,6 +5,7 @@ import {
 	colorMapOf,
 	defaultColors,
 	groupPart,
+	movePart,
 	oneWholePart,
 	paintOf,
 	paletteOf,
@@ -13,11 +14,12 @@ import {
 	partsFromColors,
 	recolor,
 	renamePart,
+	reorderParts,
 	stripScripts,
 	ungroupPart,
 	withPartIds
 } from './index';
-import { selectionSummary } from './react';
+import { nodesInRect, selectionSummary } from './react';
 
 // A crest: two shapes drawn in the same black that mean different things,
 // which is exactly what a colour-keyed model cannot tell apart.
@@ -327,5 +329,73 @@ describe('a shape with both a fill and a stroke', () => {
 		const doc = parseSvg(SHIELD);
 		expect(availablePaints(doc, ['body'])).toEqual(['fill', 'stroke']);
 		expect(availablePaints(doc, ['bar'])).toEqual(['fill']);
+	});
+});
+
+describe('ordering parts', () => {
+	const model = () => partsFromColors(parseSvg(CREST));
+
+	test('moves a part up the list the customer reads', () => {
+		const before = model();
+		const last = before.parts[2]?.id ?? '';
+		const after = movePart(before, last, -2);
+		expect(after.parts[0]?.id).toBe(last);
+		expect(after.parts).toHaveLength(before.parts.length);
+	});
+
+	test('will not walk a part off either end', () => {
+		const before = model();
+		const first = before.parts[0]?.id ?? '';
+		expect(movePart(before, first, -3).parts[0]?.id).toBe(first);
+		expect(movePart(before, first, 99).parts[2]?.id).toBe(first);
+	});
+
+	test('an unknown part or a zero move changes nothing', () => {
+		const before = model();
+		expect(movePart(before, 'nope', 1)).toBe(before);
+		expect(movePart(before, before.parts[0]?.id ?? '', 0)).toBe(before);
+	});
+
+	test('takes a whole order, keeping anything it did not mention', () => {
+		const before = model();
+		const [one, two, three] = before.parts.map((part) => part.id);
+		const after = reorderParts(before, [three ?? '', one ?? '']);
+		expect(after.parts.map((part) => part.id)).toEqual([three, one, two]);
+	});
+});
+
+describe('marquee hit test', () => {
+	const box = (id: string, left: number, top: number) => ({
+		id,
+		rect: { bottom: top + 10, left, right: left + 10, top }
+	});
+
+	test('takes every shape the rectangle touches', () => {
+		const boxes = [box('a', 0, 0), box('b', 20, 0), box('c', 40, 40)];
+		expect(
+			nodesInRect(boxes, { bottom: 15, left: 0, right: 25, top: 0 })
+		).toEqual(['a', 'b']);
+	});
+
+	test('a rectangle touching nothing selects nothing', () => {
+		expect(
+			nodesInRect([box('a', 0, 0)], {
+				bottom: 200,
+				left: 100,
+				right: 200,
+				top: 100
+			})
+		).toEqual([]);
+	});
+
+	test('edges that only graze do not count', () => {
+		expect(
+			nodesInRect([box('a', 0, 0)], {
+				bottom: 20,
+				left: 10,
+				right: 20,
+				top: 0
+			})
+		).toEqual([]);
 	});
 });

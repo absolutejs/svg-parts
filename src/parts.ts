@@ -225,6 +225,41 @@ export const ungroupPart = (
 	return { parts, unassigned: unassignedIn(doc, parts), version: 1 };
 };
 
+/** Put a part somewhere else in the order. Parts are listed to the customer
+ *  in this order, and paint order is rarely the order a person would read
+ *  them in — "outline" belongs under the thing it outlines. */
+export const movePart = (
+	model: PartModel,
+	partId: string,
+	offset: number
+): PartModel => {
+	const from = model.parts.findIndex((part) => part.id === partId);
+	if (from === -1 || offset === 0) return model;
+	const to = Math.min(Math.max(from + offset, 0), model.parts.length - 1);
+	if (to === from) return model;
+	const parts = [...model.parts];
+	const [moved] = parts.splice(from, 1);
+	if (!moved) return model;
+	parts.splice(to, 0, moved);
+
+	return { ...model, parts };
+};
+
+/** The whole order at once — what a drag-and-drop list hands back. Ids it
+ *  does not mention keep their relative order at the end. */
+export const reorderParts = (
+	model: PartModel,
+	orderedIds: string[]
+): PartModel => {
+	const byId = new Map(model.parts.map((part) => [part.id, part]));
+	const wanted = orderedIds
+		.map((id) => byId.get(id))
+		.filter((part): part is Part => part !== undefined);
+	const rest = model.parts.filter((part) => !orderedIds.includes(part.id));
+
+	return { ...model, parts: [...wanted, ...rest] };
+};
+
 /** Which part owns a node, if any — what a canvas asks on hover. */
 export const partOfNode = (model: PartModel, nodeId: string) =>
 	model.parts.find((part) => part.nodeIds.includes(nodeId)) ?? null;
