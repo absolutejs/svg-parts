@@ -1,7 +1,4 @@
 {
-	"absolutejs": {
-		"manifestContract": 2
-	},
 	"author": "Alex Kahn",
 	"bugs": {
 		"url": "https://github.com/absolutejs/svg-parts/issues"
