@@ -3,6 +3,7 @@ import {
 	applyParts,
 	availablePaints,
 	colorMapOf,
+	colorWord,
 	defaultColors,
 	groupPart,
 	movePart,
@@ -89,12 +90,33 @@ describe('partsFromColors', () => {
 		expect(model.parts[2]?.paint).toBe('stroke');
 	});
 
-	test('names what it can rather than numbering everything', () => {
+	test('names every part for what it is, never "part 3"', () => {
 		const model = partsFromColors(parseSvg(CREST));
-		// #161310 is not #000000, so it gets a positional name; pure white
-		// is named for what it is.
-		expect(model.parts[0]?.name).toBe('background');
-		expect(model.parts[2]?.name).toBe('white');
+		// #161310 is near-black, #c8102e is a red, and the white one is an
+		// outline rather than a fill.
+		expect(model.parts.map((part) => part.name)).toEqual([
+			'black',
+			'red',
+			'white outline'
+		]);
+	});
+
+	test('two parts of the same colour are told apart', () => {
+		const twice = parseSvg(
+			'<svg><rect fill="#d62828"/><circle stroke="#d62828"/><path stroke="#c02020"/></svg>'
+		);
+		expect(partsFromColors(twice).parts.map((part) => part.name)).toEqual([
+			'red',
+			'red outline',
+			'red outline 2'
+		]);
+	});
+
+	test('says the everyday word for a colour', () => {
+		expect(colorWord('#161310')).toBe('black');
+		expect(colorWord('#f5b400')).toBe('gold');
+		expect(colorWord('#2457c5')).toBe('blue');
+		expect(colorWord(null)).toBeNull();
 	});
 
 	test('a shape painted none belongs to nothing', () => {
@@ -281,7 +303,7 @@ describe('selectionSummary', () => {
 		});
 		expect(selectionSummary(model, ['dot', 'shield'])).toEqual({
 			count: 2,
-			parts: ['The dot', 'background']
+			parts: ['The dot', 'black']
 		});
 	});
 

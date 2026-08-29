@@ -45,21 +45,76 @@ const uniqueId = (wanted: string, taken: Set<string>) => {
 	return `${wanted}-${suffix}`;
 };
 
-const COLOR_WORDS: Record<string, string> = {
-	'#000000': 'black',
-	'#ffffff': 'white'
+// Names a person would use for a colour. A part called "part 3" is a part
+// nobody has named; one called "gold" is at least true, and the shop can
+// still call it "the crest".
+const COLOR_WORDS: [string, [number, number, number]][] = [
+	['black', [0, 0, 0]],
+	['white', [255, 255, 255]],
+	['grey', [128, 128, 128]],
+	['red', [214, 40, 40]],
+	['maroon', [128, 0, 32]],
+	['orange', [244, 140, 6]],
+	['gold', [245, 180, 0]],
+	['yellow', [250, 237, 39]],
+	['green', [45, 138, 62]],
+	['forest', [20, 83, 45]],
+	['teal', [0, 128, 128]],
+	['blue', [36, 87, 197]],
+	['navy', [16, 42, 94]],
+	['sky', [125, 188, 232]],
+	['purple', [107, 63, 160]],
+	['pink', [232, 106, 146]],
+	['brown', [110, 72, 43]],
+	['cream', [245, 238, 220]]
+];
+
+const rgbOf = (color: string): [number, number, number] | null => {
+	const hex = color.replace('#', '');
+	if (hex.length < 6) return null;
+
+	return [
+		Number.parseInt(hex.slice(0, 2), 16),
+		Number.parseInt(hex.slice(2, 4), 16),
+		Number.parseInt(hex.slice(4, 6), 16)
+	];
 };
 
-/** A first guess at a name, so nothing is called "part 3" unless it has to
- *  be: the colour if we have a word for it, otherwise its place in the
- *  drawing. */
-const guessName = (color: string | null, position: number, total: number) => {
-	if (color && COLOR_WORDS[color]) return COLOR_WORDS[color];
-	if (total === 1) return 'the whole design';
-	if (position === 0) return 'background';
-	if (position === total - 1) return 'detail';
+/** The everyday word for a colour — the nearest of a small, honest list. */
+export const colorWord = (color: string | null) => {
+	const rgb = color ? rgbOf(color) : null;
+	if (!rgb) return null;
+	const [nearest] = COLOR_WORDS.map(
+		([word, [red, green, blue]]) =>
+			[
+				word,
+				(rgb[0] - red) ** 2 +
+					(rgb[1] - green) ** 2 +
+					(rgb[2] - blue) ** 2
+			] as const
+	).sort((left, right) => left[1] - right[1]);
 
-	return `part ${position + 1}`;
+	return nearest?.[0] ?? null;
+};
+
+/** A first guess at a name. Every part gets a true one — the colour it is
+ *  drawn in, or what it does — so no design arrives with parts nobody has
+ *  named. */
+const guessName = (
+	color: string | null,
+	paint: Part['paint'],
+	taken: Set<string>
+) => {
+	const word = colorWord(color);
+	const base =
+		paint === 'stroke'
+			? `${word ?? 'the'} outline`
+			: (word ?? 'the whole design');
+	if (!taken.has(base)) return base;
+	let suffix = 2;
+	while (taken.has(`${base} ${suffix}`)) suffix += 1;
+
+	return `${base} ${suffix}`;
 };
 
 const paintedNodes = (doc: SvgDocument, attr: string) =>
@@ -89,10 +144,12 @@ export const partsFromColors = (doc: SvgDocument): PartModel => {
 		});
 	});
 	const taken = new Set<string>();
+	const names = new Set<string>();
 	const entries = [...byColor.entries()];
 	const parts = entries.map(([key, held], position) => {
 		const color = key.slice(key.indexOf(':') + 1);
-		const name = guessName(color, position, entries.length);
+		const name = guessName(color, held.paint, names);
+		names.add(name);
 		const id = uniqueId(slug(name, `part-${position + 1}`), taken);
 		taken.add(id);
 
