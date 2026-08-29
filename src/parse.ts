@@ -35,6 +35,10 @@ export type SvgNode = {
 	index: number;
 	/** The enclosing <g> ids, outermost first. */
 	groups: string[];
+	/** Paint the element inherits from those groups. SVG paints by
+	 *  inheritance, so a shape inside `<g stroke="#161310">` is stroked even
+	 *  though it says nothing itself. */
+	inherited: Record<string, string>;
 	/** Byte range of the element's opening tag in the source. */
 	start: number;
 	end: number;
@@ -92,8 +96,11 @@ export const paintOf = (node: SvgNode, attr: string): string | null => {
 		if (found?.[1]) return normalizePaint(found[1]);
 	}
 	const direct = node.attrs[attr];
+	if (direct !== undefined) return normalizePaint(direct);
+	// Nothing on the element: whatever it stands inside paints it.
+	const handed = node.inherited[attr];
 
-	return direct === undefined ? null : normalizePaint(direct);
+	return handed === undefined ? null : normalizePaint(handed);
 };
 
 /**
@@ -103,7 +110,8 @@ export const paintOf = (node: SvgNode, attr: string): string | null => {
  */
 export const parseSvg = (markup: string): SvgDocument => {
 	const nodes: SvgNode[] = [];
-	const open: { id: string; tag: string }[] = [];
+	const open: { attrs: Record<string, string>; id: string; tag: string }[] =
+		[];
 	let index = 0;
 	let auto = 0;
 	let viewBox: string | null = null;
@@ -125,6 +133,15 @@ export const parseSvg = (markup: string): SvgDocument => {
 		const drawable = DRAWABLE_TAGS.includes(tag);
 		if (drawable) {
 			auto += 1;
+			// Innermost group wins, the way inheritance works.
+			const inherited: Record<string, string> = {};
+			PAINT_ATTRS.forEach((paint) => {
+				const from = [...open]
+					.reverse()
+					.find((entry) => entry.attrs[paint] !== undefined);
+				if (from?.attrs[paint] !== undefined)
+					inherited[paint] = from.attrs[paint];
+			});
 			nodes.push({
 				attrs,
 				drawable,
@@ -132,6 +149,7 @@ export const parseSvg = (markup: string): SvgDocument => {
 				groups: open.map((entry) => entry.id),
 				id: attrs.id ?? `n${auto}`,
 				index,
+				inherited,
 				start,
 				tag
 			});
@@ -141,7 +159,7 @@ export const parseSvg = (markup: string): SvgDocument => {
 		// it as an ancestor of everything says nothing.
 		if (!selfClosing && tag === 'g') {
 			auto += 1;
-			open.push({ id: attrs.id ?? `g${auto}`, tag });
+			open.push({ attrs, id: attrs.id ?? `g${auto}`, tag });
 		}
 	}
 

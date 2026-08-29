@@ -421,3 +421,41 @@ describe('marquee hit test', () => {
 		).toEqual([]);
 	});
 });
+
+describe('paint inherited from a group', () => {
+	// A hoop frame: the colour lives on the <g>, and the shapes inside say
+	// nothing about their own paint.
+	const HOOP = `<svg><g fill="none" stroke="#161310" stroke-width="6"><circle id="ring" cx="120" cy="120" r="58"/><line id="cross" x1="120" y1="28" x2="120" y2="212"/></g></svg>`;
+
+	test('a shape inside a painted group is painted', () => {
+		const doc = parseSvg(HOOP);
+		const ring = doc.nodes[0];
+		expect(ring && paintOf(ring, 'stroke')).toBe('#161310');
+		expect(ring && paintOf(ring, 'fill')).toBe('none');
+	});
+
+	test('so the design has parts rather than none', () => {
+		const model = partsFromColors(parseSvg(HOOP));
+		expect(model.parts).toHaveLength(1);
+		expect(model.parts[0]?.name).toBe('black outline');
+		expect(model.parts[0]?.nodeIds).toEqual(['ring', 'cross']);
+	});
+
+	test('the element wins over what it stands inside', () => {
+		const doc = parseSvg(
+			'<svg><g stroke="#161310"><circle id="c" stroke="#c8102e"/></g></svg>'
+		);
+		expect(doc.nodes[0] && paintOf(doc.nodes[0], 'stroke')).toBe('#c8102e');
+	});
+
+	test('recolouring writes onto the shape, not the group', () => {
+		const doc = parseSvg(HOOP);
+		const model = partsFromColors(doc);
+		const painted = applyParts(doc, {
+			colors: { [model.parts[0]?.id ?? '']: '#2457c5' },
+			model
+		});
+		expect(painted).toContain('<circle stroke="#2457c5" id="ring"');
+		expect(painted).toContain('<g fill="none" stroke="#161310"');
+	});
+});
