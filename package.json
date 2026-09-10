@@ -5,7 +5,7 @@
 	},
 	"description": "Read an SVG as named, recolourable parts — a part is a set of shapes, not a hex value.",
 	"devDependencies": {
-		"@absolutejs/changelog": "^0.5.1",
+		"@absolutejs/changelog": "^0.6.0",
 		"@types/bun": "1.3.14",
 		"@types/react": "19.2.2",
 		"prettier": "3.9.6",
@@ -52,7 +52,7 @@
 		"release": "bun run check:package && npm publish --access public --tag beta",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
-		"prepublishOnly": "absolute-changelog check"
+		"prepublishOnly": "bun run check:package"
 	},
 	"types": "./dist/index.d.ts",
 	"version": "0.1.0-beta.3"
